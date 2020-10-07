@@ -308,3 +308,224 @@ def wadl(prices,periods):
         
     return results
             
+#TimeFrame Resampler
+def OHLCresample(DataFrame,TimeFrame,column='ask'):
+    
+    '''
+    param DataFrame:  OHLC dataframe with data to be resampled
+    param TimeFrame:  timeframe for resampling
+    param column:     which column to resample (bid or ask) default = 'ask'
+    return:           resampled OHLC data for the given timeframe
+    
+    '''
+
+    grouped  = DataFrame.groupby('Symbol')
+    
+    if np.any(DataFrame.columns=='Ask'):
+        if column == 'ask':
+            ask = grouped['Ask'].resample(TimeFrame).ohlc()
+            askVol = grouped['Volume'].resample(TimeFrame).count()
+            resampled = pd.DataFrame(ask)
+            resampled['Volume'] = askVol
+        
+        elif column == 'bid':
+            bid = grouped['Bid'].resample(TimeFrame).ohlc()
+            bidVol = grouped['Volume'].resample(TimeFrame).count()
+            resampled = pd.DataFrame(ask)
+            resampled['Volume'] = bidVol
+    
+        else:
+        
+            raise ValueError('Column but be a string. Either ask or bid')
+    
+    elif np.any(DataFrame.columns=='Close'):
+        open = grouped['Open'].resample(TimeFrame).ohlc()
+        high = grouped['High'].resample(TimeFrame).ohlc()
+        low = grouped['Low'].resample(TimeFrame).ohlc()
+        close = grouped['Close'].resample(TimeFrame).ohlc()
+        askVol = grouped['Volume'].resample(TimeFrame).count()
+        
+        resampled=pd.DataFrame(open)
+        resampled['High'] = high
+        resampled['Low'] = low
+        resampled['Close'] = close
+        resampled['Volume'] = askVol
+        
+    resampled = resampled.dropna()
+    
+    return resampled
+
+def momentum(prices, periods):
+    
+    '''
+    param prices:  OHLC dataframe
+    param periods:  list of periods to calculate value
+    param column:     which column to resample (bid or ask) default = 'ask'
+    return:           momemtum indicator
+    
+    '''
+    
+    results = holder()
+    open = {}
+    close= {}
+    
+    for i in range(0,len(prices)):
+        open[periods[i]] = pd.DataFrame(list(zip(prices.Open.iloc[periods[i]:]-prices.Open.iloc[:-periods[i]].values)),
+                                        index=prices.iloc[periods[i]:].index,
+                                        columns=['Open'])
+        
+        close[periods[i]] = pd.DataFrame(list(zip(prices.Close.iloc[periods[i]:]-prices.Close.iloc[:-periods[i]].values)),
+                                        index=prices.iloc[periods[i]:].index,
+                                        columns=['Close'])
+        
+        results.Open = open
+        results.Close= close
+        
+        return results
+    
+# Stochastic Oscillator
+
+def stochastic(prices, periods):
+    
+    '''
+    param prices:  OHLC dataframe
+    param periods:  list of periods to calculate value
+    return:         Stochastic oscillator indicator values
+    
+    '''
+    
+    results = holder()
+    close  ={}
+    
+    for i in range(0,len(prices)):
+        Ks = []
+        
+        for j in range(periods[i],len(prices)-periods[i]):
+            
+            H=prices.High.iloc[j-periods[i]:j].max()
+            L=prices.Low.iloc[j-periods[i]:j].min()
+            C=prices.Close.iloc[j+1]
+            
+            if H==L:
+                K=0
+            else:
+                K=100*(C-L)/(H-L)
+                
+            Ks = np.append(Ks,K)
+            
+            df = pd.DataFrame(Ks, index=prices.iloc[periods[i]+1:-periods[i]+1].index)
+            df.columns = [['K']]
+            df['D'] = df.K.rolling(3).mean()
+            
+            close[periods[i]] = df
+            
+        results.Close = close
+        
+        return results
+    
+# Williams %R
+
+def williams(prices, periods):
+    
+    '''
+    param prices:  OHLC dataframe
+    param periods:  list of periods to calculate value
+    return:         Williams %R indicator values
+    
+    '''
+    
+    results = holder()
+    close  ={}
+    
+    for i in range(0,len(prices)):
+        Rs = []
+        
+        for j in range(periods[i],len(prices)-periods[i]):
+            
+            H=prices.High.iloc[j-periods[i]:j].max()
+            L=prices.Low.iloc[j-periods[i]:j].min()
+            C=prices.Close.iloc[j+1]
+            
+            if H==L:
+                R=0
+            else:
+                R=100*(H-C)/(H-L)
+                
+            Rs = np.append(Rs,R)
+            
+            df = pd.DataFrame(Rs, index=prices.iloc[periods[i]+1:-periods[i]+1].index)
+            df.columns = [['R']]
+            df['D'] = df.K.rolling(3).mean()
+            
+            close[periods[i]] = df
+            
+        results.Close = close
+        
+        return results
+    
+#Price rate of change
+
+def proc(prices, periods):
+    
+    '''
+    param prices:  OHLC dataframe
+    param periods:  list of periods to calculate value
+    return:         Price rate of change indicator values
+    
+    '''
+    
+    results = holder()
+    proc = {}
+    
+    for i in 0,len(prices)):
+    
+        proc[periods[i]] = pd.DataFrame((prices.Close.iloc[periods[i]:]-prices.Close.iloc[:-periods[i]].values)\
+                                        /prices.close.iloc[:-periods[i]].values)
+            
+        proc[periods[i]].columns = [['Close']]
+        
+        results.proc = proc
+        
+        return results
+    
+# Accumulation Distribution Oscillator
+
+def adosc(prices, periods):
+    
+    '''
+    param prices:  OHLC dataframe
+    param periods:  list of periods to calculate value
+    return:         Accumulation Distribution Oscillator indicator values
+    
+    '''
+    
+    results = holder()
+    accdist  ={}
+    
+    for i in range(0,len(prices)):
+        AD = []
+        
+        for j in range(periods[i],len(prices)-periods[i]):
+            
+            H=prices.High.iloc[j-periods[i]:j].max()
+            L=prices.Low.iloc[j-periods[i]:j].min()
+            C=prices.Close.iloc[j+1]
+            V=prices.AskVol.iloc[j+1]
+            
+            if H==L:
+                CLV=0
+            else:
+                CLV=100*((C-L)-(H-C))/(H-L)
+                
+            AD = np.append(AD,CLV*V)
+            
+            AD = AD.cumsum()
+            
+            AD = pd.DataFrame(AD, index=prices.iloc[periods[i]+1:-periods[i]+1].index)
+            AD.columns = [['AD']]
+            
+            accdist[periods[i]] = AD
+            
+        results.AD = accdist
+        
+        return results
